@@ -1,0 +1,364 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blockchain Ticket QR Generator</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: Arial, sans-serif;
+      background: #f3f5f9;
+      color: #182230;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 26px;
+      background: white;
+      border-radius: 14px;
+      box-shadow: 0 5px 22px #00000012;
+    }
+
+    h1 {
+      text-align: center;
+      color: #173b73;
+      font-size: 26px;
+    }
+
+    .intro {
+      text-align: center;
+      color: #526071;
+      line-height: 1.5;
+    }
+
+    label {
+      display: block;
+      margin-top: 16px;
+      margin-bottom: 7px;
+      font-weight: bold;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+      font-size: 15px;
+    }
+
+    button {
+      width: 100%;
+      padding: 13px;
+      margin-top: 18px;
+      border: none;
+      border-radius: 7px;
+      background: #2457a7;
+      color: white;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #173b73;
+    }
+
+    .notice {
+      margin: 20px 0;
+      padding: 12px;
+      background: #fff7df;
+      border-radius: 7px;
+      color: #6b4d00;
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    #result {
+      display: none;
+      margin-top: 26px;
+      text-align: center;
+    }
+
+    #qrcode {
+      display: flex;
+      justify-content: center;
+      margin: 20px auto;
+      padding: 14px;
+      background: white;
+    }
+
+    #qrcode img,
+    #qrcode canvas {
+      max-width: 100%;
+      height: auto;
+    }
+
+    pre {
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+      text-align: left;
+      padding: 12px;
+      background: #f3f5f9;
+      border-radius: 7px;
+      font-size: 12px;
+    }
+
+    #status {
+      margin-top: 15px;
+      line-height: 1.5;
+    }
+
+    .small {
+      color: #526071;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="container">
+    <h1>Event Ticket QR Generator</h1>
+
+    <p class="intro">
+      Blockchain-Based Event Ticket Verification
+    </p>
+
+    <div class="notice">
+      This first version generates a QR code from the details
+      you enter. It does not yet verify the ticket against the
+      blockchain. Live verification will be added next.
+    </div>
+
+    <form id="ticketForm">
+      <label for="contractAddress">
+        Deployed Contract Address
+      </label>
+      <input
+        id="contractAddress"
+        type="text"
+        placeholder="0x..."
+        pattern="0x[a-fA-F0-9]{40}"
+        required
+      >
+
+      <label for="chainId">Network Chain ID</label>
+      <input
+        id="chainId"
+        type="number"
+        min="1"
+        step="1"
+        placeholder="Enter your network chain ID"
+        required
+      >
+
+      <label for="eventId">Event ID</label>
+      <input
+        id="eventId"
+        type="number"
+        min="1"
+        step="1"
+        placeholder="Enter event ID"
+        required
+      >
+
+      <label for="ticketId">Ticket ID</label>
+      <input
+        id="ticketId"
+        type="number"
+        min="1"
+        step="1"
+        placeholder="Enter ticket ID"
+        required
+      >
+
+      <label for="ownerAddress">
+        Current Ticket Owner Address
+      </label>
+      <input
+        id="ownerAddress"
+        type="text"
+        placeholder="0x..."
+        pattern="0x[a-fA-F0-9]{40}"
+        required
+      >
+
+      <button type="submit">Generate Ticket QR Code</button>
+    </form>
+
+    <section id="result">
+      <h2>Ticket QR Code</h2>
+      <div id="qrcode"></div>
+
+      <p id="ticketCaption"></p>
+
+      <h3>Encoded Ticket Data</h3>
+      <pre id="payload"></pre>
+
+      <button type="button" id="downloadButton">
+        Download QR Code as PNG
+      </button>
+
+      <button type="button" id="copyButton">
+        Copy Ticket Data
+      </button>
+
+      <p class="small">
+        Keep the ticket ID and current owner's address consistent
+        with the deployed smart contract.
+      </p>
+    </section>
+
+    <p id="status" role="status"></p>
+  </main>
+
+  <script>
+    const form = document.getElementById("ticketForm");
+    const result = document.getElementById("result");
+    const qrContainer = document.getElementById("qrcode");
+    const statusMessage = document.getElementById("status");
+
+    let currentPayload = null;
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+
+      if (typeof QRCode === "undefined") {
+        statusMessage.textContent =
+          "QR library could not load. Check your internet connection.";
+        return;
+      }
+
+      const contractAddress =
+        document.getElementById("contractAddress").value.trim();
+
+      const chainId = Number(
+        document.getElementById("chainId").value
+      );
+
+      const eventId = Number(
+        document.getElementById("eventId").value
+      );
+
+      const ticketId = Number(
+        document.getElementById("ticketId").value
+      );
+
+      const ownerAddress =
+        document.getElementById("ownerAddress").value.trim();
+
+      const addressPattern = /^0x[a-fA-F0-9]{40}$/;
+
+      if (
+        !addressPattern.test(contractAddress) ||
+        !addressPattern.test(ownerAddress)
+      ) {
+        statusMessage.textContent =
+          "Enter valid 42-character wallet and contract addresses.";
+        return;
+      }
+
+      if (
+        !Number.isSafeInteger(chainId) || chainId < 1 ||
+        !Number.isSafeInteger(eventId) || eventId < 1 ||
+        !Number.isSafeInteger(ticketId) || ticketId < 1
+      ) {
+        statusMessage.textContent =
+          "Chain ID, event ID, and ticket ID must be positive integers.";
+        return;
+      }
+
+      currentPayload = {
+        project: "Blockchain-Based Event Ticket Verification",
+        version: 1,
+        chainId: chainId,
+        contractAddress: contractAddress,
+        eventId: eventId,
+        ticketId: ticketId,
+        ownerAddress: ownerAddress
+      };
+
+      qrContainer.innerHTML = "";
+
+      const encodedData = JSON.stringify(currentPayload);
+
+      new QRCode(qrContainer, {
+        text: encodedData,
+        width: 240,
+        height: 240,
+        colorDark: "#111827",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+
+      document.getElementById("ticketCaption").textContent =
+        "Ticket ID: " + ticketId + " | Event ID: " + eventId;
+
+      document.getElementById("payload").textContent =
+        JSON.stringify(currentPayload, null, 2);
+
+      result.style.display = "block";
+      statusMessage.textContent =
+        "QR code generated. Check the details before downloading.";
+    });
+
+    document.getElementById("downloadButton")
+      .addEventListener("click", function () {
+        const canvas = qrContainer.querySelector("canvas");
+        const image = qrContainer.querySelector("img");
+
+        let imageUrl = null;
+
+        if (canvas) {
+          imageUrl = canvas.toDataURL("image/png");
+        } else if (image && image.src) {
+          imageUrl = image.src;
+        }
+
+        if (!imageUrl || !currentPayload) {
+          statusMessage.textContent =
+            "Generate a QR code before downloading.";
+          return;
+        }
+
+        const link = document.createElement("a");
+        link.href = imageUrl;
+        link.download = "ticket-" +
+          currentPayload.ticketId + "-qr.png";
+        link.click();
+      });
+
+    document.getElementById("copyButton")
+      .addEventListener("click", async function () {
+        if (!currentPayload) {
+          statusMessage.textContent =
+            "Generate a QR code first.";
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(
+            JSON.stringify(currentPayload, null, 2)
+          );
+
+          statusMessage.textContent =
+            "Ticket data copied successfully.";
+        } catch (error) {
+          statusMessage.textContent =
+            "Copy is unavailable here. You can copy the data displayed above.";
+        }
+      });
+  </script>
+</body>
+</html>
